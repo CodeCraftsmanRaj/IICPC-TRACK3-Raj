@@ -45,3 +45,4 @@ backend/.env
 *.log
 logs/
 cli-tool/*.log
+proctor_system.db

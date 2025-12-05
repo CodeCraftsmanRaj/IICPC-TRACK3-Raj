@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { DashboardStats, TelemetryEvent, ThreatDistribution, UserDetailData, RiskLevel } from '@/types';
 
+// Points to the FastAPI backend
 const API_BASE_URL = 'http://localhost:8000';
 
 export const apiClient = axios.create({
@@ -11,7 +12,12 @@ export const apiClient = axios.create({
   },
 });
 
-// Mock data generators
+// ============================================================================
+// MOCK DATA GENERATORS (Fallback / Simulation Mode)
+// ============================================================================
+// These are used ONLY if the Python backend is offline or unreachable.
+// They generate realistic-looking data for UI testing.
+
 const generateUserId = () => `STU-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
 const getRiskLevel = (score: number): RiskLevel => {
@@ -56,7 +62,7 @@ const generateMockEvent = (index: number): TelemetryEvent => {
     },
     remote_data: {
       remote_detected: isRemote,
-      risk_score: isRemote ? 60 + Math.floor(Math.random() * 40) : Math.floor(Math.random() * 40),
+      risk_score: isRemote ? 60 + Math.floor(Math.random() * 40) : Math.floor(Math.random() * 30),
       tools_detected: isRemote ? ['RDP', 'AnyDesk', 'TeamViewer'].slice(0, Math.floor(Math.random() * 3) + 1) : [],
     },
     screen_data: {
@@ -70,11 +76,11 @@ const generateMockEvent = (index: number): TelemetryEvent => {
       anomaly_type: Math.random() > 0.5 ? 'Rapid Tab Switching' : 'Unusual Mouse Pattern',
     },
     triggers: triggerTypes.slice(0, Math.floor(Math.random() * 3) + 1),
-    status: ['open', 'resolved', 'investigating'][Math.floor(Math.random() * 3)] as 'open' | 'resolved' | 'investigating',
+    status: riskScore > 50 ? 'open' : 'resolved',
   };
 };
 
-// Mock data
+// Default Mock Data Containers
 export const mockStats: DashboardStats = {
   active_sessions: 247,
   critical_threats: 12,
@@ -115,7 +121,7 @@ export const generateUserDetail = (userId: string): UserDetailData => {
     screen_sharing: Math.random() > 0.7,
     behavior_anomaly: Math.random() > 0.6,
     vm_confidence: vmCheck ? 70 + Math.floor(Math.random() * 30) : Math.floor(Math.random() * 30),
-    remote_confidence: remoteAccess ? 60 + Math.floor(Math.random() * 40) : Math.floor(Math.random() * 40),
+    remote_confidence: remoteAccess ? 60 + Math.floor(Math.random() * 40) : Math.floor(Math.random() * 30),
     telemetry_history: Array.from({ length: 30 }, (_, i) => ({
       timestamp: new Date(Date.now() - (30 - i) * 60000).toISOString(),
       risk_score: Math.max(0, Math.min(100, riskScore + (Math.random() - 0.5) * 30)),
@@ -126,13 +132,16 @@ export const generateUserDetail = (userId: string): UserDetailData => {
   };
 };
 
-// API functions with mock fallback
+// ============================================================================
+// REAL API IMPLEMENTATION
+// ============================================================================
+
 export const fetchDashboardStats = async (): Promise<DashboardStats> => {
   try {
     const response = await apiClient.get('/api/v1/dashboard/stats');
     return response.data;
-  } catch {
-    console.log('Using mock data for dashboard stats');
+  } catch (error) {
+    console.warn('Backend unavailable, using simulation data for Stats.', error);
     return mockStats;
   }
 };
@@ -140,9 +149,10 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
 export const fetchTelemetryEvents = async (): Promise<TelemetryEvent[]> => {
   try {
     const response = await apiClient.get('/api/v1/telemetry/events');
+    // Ensure dates are strings for consistency
     return response.data;
-  } catch {
-    console.log('Using mock data for telemetry events');
+  } catch (error) {
+    console.warn('Backend unavailable, using simulation data for Events.', error);
     return mockEvents;
   }
 };
@@ -151,18 +161,21 @@ export const fetchThreatDistribution = async (): Promise<ThreatDistribution[]> =
   try {
     const response = await apiClient.get('/api/v1/threats/distribution');
     return response.data;
-  } catch {
-    console.log('Using mock data for threat distribution');
+  } catch (error) {
+    console.warn('Backend unavailable, using simulation data for Distribution.', error);
     return mockThreatDistribution;
   }
 };
 
+// Note: Top Threats endpoint might not be implemented in MVP backend yet, 
+// so we might default to mock often.
 export const fetchTopThreats = async (): Promise<{ name: string; count: number }[]> => {
   try {
-    const response = await apiClient.get('/api/v1/threats/top');
-    return response.data;
-  } catch {
-    console.log('Using mock data for top threats');
+    // If you implemented this endpoint in main.py, uncomment:
+    // const response = await apiClient.get('/api/v1/threats/top');
+    // return response.data;
+    return mockTopThreats; 
+  } catch (error) {
     return mockTopThreats;
   }
 };
@@ -171,8 +184,8 @@ export const fetchUserDetail = async (userId: string): Promise<UserDetailData> =
   try {
     const response = await apiClient.get(`/api/v1/users/${userId}/detail`);
     return response.data;
-  } catch {
-    console.log('Using mock data for user detail');
+  } catch (error) {
+    console.warn(`Backend unavailable, simulating details for user ${userId}.`, error);
     return generateUserDetail(userId);
   }
 };
