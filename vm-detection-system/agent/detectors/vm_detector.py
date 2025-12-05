@@ -9,8 +9,13 @@ import subprocess
 import psutil
 import re
 import os
-import winreg
 from typing import Dict, List, Tuple
+
+# FIX: Safe import for winreg (Windows only)
+try:
+    import winreg
+except ImportError:
+    winreg = None
 
 class VMDetector:
     """Detects virtual machine environments"""
@@ -82,7 +87,8 @@ class VMDetector:
     
     def check_registry(self) -> Tuple[bool, List[str]]:
         """Check Windows registry for VM indicators (Windows only)"""
-        if platform.system() != 'Windows':
+        # FIX: Ensure we are on Windows AND winreg is available
+        if platform.system() != 'Windows' or winreg is None:
             return False, []
         
         detected = []
@@ -221,7 +227,8 @@ class RemoteAccessDetector:
     
     def check_registry_remote(self) -> Tuple[bool, List[str]]:
         """Check registry for remote access tools (Windows only)"""
-        if platform.system() != 'Windows':
+        # FIX: Ensure we are on Windows AND winreg is available
+        if platform.system() != 'Windows' or winreg is None:
             return False, []
         
         detected = []

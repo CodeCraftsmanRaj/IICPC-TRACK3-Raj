@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 
 # Import all detection modules
-from vm_detector import VMDetector, RemoteAccessDetector, ScreenSharingDetector
+from .vm_detector import VMDetector, RemoteAccessDetector, ScreenSharingDetector
 
 # Try importing optional modules with fallbacks
 try:
