@@ -35,6 +35,16 @@ def get_db():
 
 fusion_engine = DecisionFusionEngine()
 
+# --- ROOT ENDPOINT (Fixes the "Not Found" browser error) ---
+@app.get("/")
+def read_root():
+    return {
+        "status": "online", 
+        "system": "VM & Remote Access Detection Engine",
+        "version": "1.0.0",
+        "docs_url": "http://localhost:8000/docs"
+    }
+
 # --- AGENT ENDPOINTS ---
 
 @app.post("/api/v1/telemetry/{session_id}", response_model=AlertResponse)
@@ -90,7 +100,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     ).count()
     
     # Count specific threat types via string matching in JSON
-    # (In production, use specific boolean columns for performance)
     vm_count = db.query(TelemetryRecord).filter(
         TelemetryRecord.triggers.like('%Virtual Machine%')
     ).count()
@@ -116,7 +125,6 @@ def get_telemetry_events(limit: int = 50, db: Session = Depends(get_db)):
     events = []
     for r in records:
         triggers = json.loads(r.triggers)
-        # Determine main trigger type for UI display
         main_trigger = triggers[0] if triggers else "Routine Check"
         
         events.append({
@@ -137,7 +145,6 @@ def get_telemetry_events(limit: int = 50, db: Session = Depends(get_db)):
 
 @app.get("/api/v1/threats/distribution")
 def get_threat_distribution(db: Session = Depends(get_db)):
-    # Group by risk level
     results = db.query(
         TelemetryRecord.risk_level, func.count(TelemetryRecord.risk_level)
     ).group_by(TelemetryRecord.risk_level).all()
@@ -153,10 +160,6 @@ def get_threat_distribution(db: Session = Depends(get_db)):
 
 @app.get("/api/v1/threats/top")
 def get_top_threats(db: Session = Depends(get_db)):
-    """
-    Parses triggers from the last 100 records to find top threats.
-    This replaces the dummy data with real aggregated data.
-    """
     records = db.query(TelemetryRecord.triggers).order_by(
         TelemetryRecord.timestamp.desc()
     ).limit(100).all()
@@ -166,11 +169,7 @@ def get_top_threats(db: Session = Depends(get_db)):
         triggers = json.loads(r[0])
         all_triggers.extend(triggers)
         
-    # Count occurrences
     counts = Counter(all_triggers)
-    
-    # Format for Frontend
-    # If DB is empty, return empty list to show "No Data" instead of fake data
     return [{"name": name, "count": count} for name, count in counts.most_common(6)]
 
 @app.get("/api/v1/users/{user_id}/detail")
