@@ -56,7 +56,9 @@ def collect_snapshot(detectors, behavior_monitor=None):
 
 def main():
     parser = argparse.ArgumentParser(description="IICPC Track 3 Agent")
-    parser.add_argument("--server", default="http://localhost:8000", help="Backend API URL")
+    # parser.add_argument("--server", default="http://localhost:8000", help="Backend API URL")
+    # use my hosted URL
+    parser.add_argument("--server", default="https://iicpc-track3-raj.onrender.com", help="Backend API URL")
     parser.add_argument("--interval", type=int, default=10, help="Scan interval in seconds")
     args = parser.parse_args()
 
