@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./vm-detection-system/server
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist the SQLite database
+      - ./vm_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/proctor_system.db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
