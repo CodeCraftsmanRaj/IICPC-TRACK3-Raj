@@ -1,0 +1,16 @@
+# Core Requirements (REQUIRED)
+psutil==5.9.6
+
+# Optional but Recommended
+pynput==1.7.6          # For behavior/interaction monitoring
+pywin32==306           # For Windows-specific features (Windows only)
+
+# Advanced Features (Optional)
+scapy==2.5.0         # For deep packet inspection (requires admin/root)
+numpy==1.24.3        # For ML-based detection (if implementing)
+
+# Installation Guide:
+# Basic (minimum):     pip install psutil
+# Recommended:         pip install psutil pynput
+# Windows Full:        pip install psutil pynput pywin32
+# Advanced:            pip install psutil pynput pywin32 scapy numpy
