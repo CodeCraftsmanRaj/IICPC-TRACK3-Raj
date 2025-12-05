@@ -1,9 +1,10 @@
 import uvicorn
 import json
+from collections import Counter
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from datetime import datetime, timedelta
 from typing import List
 
@@ -19,7 +20,7 @@ app = FastAPI(title="VM & Remote Access Detection System API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, set to frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +35,7 @@ def get_db():
 
 fusion_engine = DecisionFusionEngine()
 
-# --- AGENT ENDPOINTS (Ingestion) ---
+# --- AGENT ENDPOINTS ---
 
 @app.post("/api/v1/telemetry/{session_id}", response_model=AlertResponse)
 async def ingest_telemetry(
@@ -42,10 +43,10 @@ async def ingest_telemetry(
     data: TelemetryData, 
     db: Session = Depends(get_db)
 ):
-    # 1. Analyze Data
+    # Real-time Analysis
     analysis = fusion_engine.analyze(data.dict())
     
-    # 2. Store in Database (Real persistence)
+    # Save to DB
     db_record = TelemetryRecord(
         session_id=session_id,
         timestamp=datetime.now(),
@@ -72,29 +73,30 @@ async def ingest_telemetry(
         "actions_required": analysis['actions']
     }
 
-# --- FRONTEND ENDPOINTS (Visualization) ---
+# --- DASHBOARD ENDPOINTS ---
 
 @app.get("/api/v1/dashboard/stats")
 def get_dashboard_stats(db: Session = Depends(get_db)):
-    """Returns real aggregate statistics from the database"""
-    # Active sessions (unique session_ids in last 5 minutes)
     five_min_ago = datetime.now() - timedelta(minutes=5)
+    
+    # Active sessions in last 5 mins
     active_count = db.query(TelemetryRecord.session_id).filter(
         TelemetryRecord.timestamp >= five_min_ago
     ).distinct().count()
     
-    # Count Critical Threats (Total)
+    # Total critical alerts
     critical_count = db.query(TelemetryRecord).filter(
         TelemetryRecord.risk_level == 'CRITICAL'
     ).count()
     
-    # Simple keyword search in stored JSON for specific threats
+    # Count specific threat types via string matching in JSON
+    # (In production, use specific boolean columns for performance)
     vm_count = db.query(TelemetryRecord).filter(
-        TelemetryRecord.vm_data.like('%"is_vm": true%')
+        TelemetryRecord.triggers.like('%Virtual Machine%')
     ).count()
     
     rdp_count = db.query(TelemetryRecord).filter(
-        TelemetryRecord.remote_data.like('%"remote_detected": true%')
+        TelemetryRecord.triggers.like('%Remote Access%')
     ).count()
     
     return {
@@ -107,25 +109,25 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 
 @app.get("/api/v1/telemetry/events")
 def get_telemetry_events(limit: int = 50, db: Session = Depends(get_db)):
-    """Returns list of recent events for the feed"""
     records = db.query(TelemetryRecord).order_by(
         TelemetryRecord.timestamp.desc()
     ).limit(limit).all()
     
     events = []
     for r in records:
-        # Convert DB model back to Frontend format
         triggers = json.loads(r.triggers)
+        # Determine main trigger type for UI display
+        main_trigger = triggers[0] if triggers else "Routine Check"
+        
         events.append({
             "id": str(r.id),
             "timestamp": r.timestamp.isoformat(),
             "user_id": r.session_id,
             "risk_score": r.risk_score,
             "risk_level": r.risk_level,
-            "trigger_type": triggers[0] if triggers else "Routine Scan",
+            "trigger_type": main_trigger,
             "triggers": triggers,
             "status": "open" if r.risk_score > 50 else "resolved",
-            # Deserialize JSON strings back to objects
             "vm_data": json.loads(r.vm_data),
             "remote_data": json.loads(r.remote_data),
             "screen_data": json.loads(r.screen_data),
@@ -135,23 +137,44 @@ def get_telemetry_events(limit: int = 50, db: Session = Depends(get_db)):
 
 @app.get("/api/v1/threats/distribution")
 def get_threat_distribution(db: Session = Depends(get_db)):
-    """Returns counts grouped by risk level"""
+    # Group by risk level
     results = db.query(
         TelemetryRecord.risk_level, func.count(TelemetryRecord.risk_level)
     ).group_by(TelemetryRecord.risk_level).all()
     
-    dist_map = {r[0]: r[1] for r in results}
+    dist = {r[0]: r[1] for r in results}
     
     return [
-        {"name": "Critical", "value": dist_map.get("CRITICAL", 0), "color": "hsl(0, 72%, 51%)"},
-        {"name": "High", "value": dist_map.get("HIGH", 0), "color": "hsl(38, 92%, 50%)"},
-        {"name": "Medium", "value": dist_map.get("MEDIUM", 0), "color": "hsl(48, 96%, 53%)"},
-        {"name": "Low", "value": dist_map.get("LOW", 0), "color": "hsl(199, 89%, 48%)"},
+        {"name": "Critical", "value": dist.get("CRITICAL", 0), "color": "hsl(0, 72%, 51%)"},
+        {"name": "High", "value": dist.get("HIGH", 0), "color": "hsl(38, 92%, 50%)"},
+        {"name": "Medium", "value": dist.get("MEDIUM", 0), "color": "hsl(48, 96%, 53%)"},
+        {"name": "Low", "value": dist.get("LOW", 0), "color": "hsl(199, 89%, 48%)"},
     ]
+
+@app.get("/api/v1/threats/top")
+def get_top_threats(db: Session = Depends(get_db)):
+    """
+    Parses triggers from the last 100 records to find top threats.
+    This replaces the dummy data with real aggregated data.
+    """
+    records = db.query(TelemetryRecord.triggers).order_by(
+        TelemetryRecord.timestamp.desc()
+    ).limit(100).all()
+    
+    all_triggers = []
+    for r in records:
+        triggers = json.loads(r[0])
+        all_triggers.extend(triggers)
+        
+    # Count occurrences
+    counts = Counter(all_triggers)
+    
+    # Format for Frontend
+    # If DB is empty, return empty list to show "No Data" instead of fake data
+    return [{"name": name, "count": count} for name, count in counts.most_common(6)]
 
 @app.get("/api/v1/users/{user_id}/detail")
 def get_user_detail(user_id: str, db: Session = Depends(get_db)):
-    """Get detailed history for a specific user"""
     records = db.query(TelemetryRecord).filter(
         TelemetryRecord.session_id == user_id
     ).order_by(TelemetryRecord.timestamp.desc()).limit(20).all()

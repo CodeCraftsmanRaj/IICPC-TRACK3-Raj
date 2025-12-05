@@ -171,15 +171,14 @@ export const fetchThreatDistribution = async (): Promise<ThreatDistribution[]> =
 // so we might default to mock often.
 export const fetchTopThreats = async (): Promise<{ name: string; count: number }[]> => {
   try {
-    // If you implemented this endpoint in main.py, uncomment:
-    // const response = await apiClient.get('/api/v1/threats/top');
-    // return response.data;
-    return mockTopThreats; 
+    // REAL: Fetch aggregated triggers from the backend
+    const response = await apiClient.get('/api/v1/threats/top');
+    return response.data;
   } catch (error) {
+    console.warn('Backend unavailable, using simulation data for Top Threats.', error);
     return mockTopThreats;
   }
 };
-
 export const fetchUserDetail = async (userId: string): Promise<UserDetailData> => {
   try {
     const response = await apiClient.get(`/api/v1/users/${userId}/detail`);
